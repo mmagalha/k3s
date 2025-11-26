@@ -1,0 +1,83 @@
+# Exemplo 1: LTMPool VÁLIDO com partition PP
+apiVersion: ltm.network.sonae.pt/v1alpha1
+kind: LTMPool
+metadata:
+  name: pool-production
+  namespace: default
+  annotations:
+    partition: "PP"
+spec:
+  name: "pool-prod"
+  loadBalancingMode: "round-robin"
+  metadata:
+    - name: "STREAM"
+      value: "payment"
+    - name: "LAC"
+      value: "LAC001"
+
+---
+# Exemplo 2: LTMVirtual VÁLIDO com partition TST
+apiVersion: ltm.network.sonae.pt/v1alpha1
+kind: LTMVirtual
+metadata:
+  name: virtual-testing
+  namespace: default
+  annotations:
+    partition: "TST"
+spec:
+  name: "virtual-test"
+  destination: "10.1.1.100:80"
+  pool: "pool-test"
+
+---
+# Exemplo 3: LTMPoolMember VÁLIDO com partition DEV
+apiVersion: ltm.network.sonae.pt/v1alpha1
+kind: LTMPoolMember
+metadata:
+  name: member-development
+  namespace: default
+  annotations:
+    partition: "DEV"
+spec:
+  poolName: "pool-dev"
+  address: "10.1.1.50"
+  port: 8080
+
+---
+# Exemplo 4: LTMPool INVÁLIDO - sem annotation partition
+apiVersion: ltm.network.sonae.pt/v1alpha1
+kind: LTMPool
+metadata:
+  name: pool-without-partition
+  namespace: default
+spec:
+  name: "pool-invalid"
+  loadBalancingMode: "round-robin"
+
+---
+# Exemplo 5: LTMVirtual INVÁLIDO - partition com valor não permitido
+apiVersion: ltm.network.sonae.pt/v1alpha1
+kind: LTMVirtual
+metadata:
+  name: virtual-invalid-partition
+  namespace: default
+  annotations:
+    partition: "INVALID"
+spec:
+  name: "virtual-invalid"
+  destination: "10.1.1.200:80"
+  pool: "pool-invalid"
+
+---
+# Exemplo 6: LTMPoolMember INVÁLIDO - partition com valor não permitido
+apiVersion: ltm.network.sonae.pt/v1alpha1
+kind: LTMPoolMember
+metadata:
+  name: member-invalid-partition
+  namespace: default
+  annotations:
+    partition: "PROD"  # Não está na lista permitida
+spec:
+  poolName: "pool-prod"
+  address: "10.1.1.60"
+  port: 8080

@@ -1,0 +1,11 @@
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sLTMPoolPartitionAnnotations
+metadata:
+  name: enforce-ltmpool-partition-annotations
+spec:
+  match:
+    kinds:
+      - apiGroups: ["ltm.network.sonae.pt"]
+        kinds: ["LTMPool"]
+  parameters: {}

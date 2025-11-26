@@ -1,0 +1,29 @@
+#---
+#- name: Cluster prep
+#  hosts: k3s_cluster
+#  gather_facts: true
+#  become: true
+#  roles:
+#    - role: k3s.orchestration.prereq
+#    - role: k3s.orchestration.airgap
+#    - role: k3s.orchestration.raspberrypi
+#
+#- name: Setup K3S server
+#  hosts: server
+#  become: true
+#  roles:
+#    - role: k3s.orchestration.k3s_server
+#
+#- name: Setup K3S agent
+#  hosts: agent
+#  become: true
+#  roles:
+#    - role: k3s.orchestration.k3s_agent
+
+- name: Create kubernetes resources for lookup output with `--enable-helm` set
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Apply kustomize directories with helm charts
+      kubernetes.core.k8s:
+        definition: "{{ lookup('kubernetes.core.kustomize', dir='./', enable_helm=True) }}"

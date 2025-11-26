@@ -1,0 +1,16 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mmagalha-cert
+spec:
+  privateKey:
+    rotationPolicy: Always
+  secretName: mmagalha-tls
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  issuerRef:
+    name: letsencrypt-dns-cloudflare
+    kind: ClusterIssuer
+  dnsNames:
+  - mmagalha.com
+  - "*.mmagalha.com"

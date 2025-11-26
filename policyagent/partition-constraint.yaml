@@ -1,0 +1,18 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sLTMPartition
+metadata:
+  name: require-partition-annotation
+spec:
+  match:
+    kinds:
+      - apiGroups: ["ltm.network.sonae.pt"]
+        kinds: ["LTMPoolMember", "LTMPool", "LTMVirtual"]
+    namespaces:
+      - "default"    
+  parameters:
+    allowedPartitions: ["PP", "TST", "DEV"]
+    exemptNamespaces: 
+      - "kube-system"
+      - "gatekeeper-system"
+      - "cert-manager"
+      - "ingress-nginx"

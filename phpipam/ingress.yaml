@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-phpipam-web-v1
+  namespace: phpipam
+  annotations:
+    #cert-manager.io/cluster-issuer: letsencrypt-dns-cloudflar
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-set-headers: |
+      Host $host;
+      X-Real-IP $remote_addr;
+      X-Forwarded-Proto https;
+      X-Forwarded-For $proxy_add_x_forwarded_for;
+      X-Forwarded-Host $host;
+      X-Forwarded-Ssl on; 
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+      - phpipam.mmagalha.com 
+    secretName: mmagalha-tls
+  rules:
+  - host: "phpipam.mmagalha.com"
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: phpipam-web
+            port:
+              number: 80

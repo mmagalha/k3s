@@ -1,0 +1,5 @@
+# namespace.yaml para o projeto phpipam
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: phpipam

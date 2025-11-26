@@ -1,0 +1,31 @@
+apiVersion: ltm.network.sonae.pt/v1alpha1
+kind: LTMPool
+metadata:
+  name: web-pool
+  labels:
+    app: frontend
+    environment: production
+spec:
+  name: web-pool
+  partition: "Common"
+  description: "Pool de servidores web da aplicação frontend"
+  state: present
+  lb_method: least-connections-member
+  metadata:
+    - name: "LAC"
+      value: "production"
+    - name: "TEAM"
+      value: "frontend"
+  min_up_members: 2
+  min_up_members_action: failover
+  min_up_members_checking: enabled
+  monitor_type: m_of_n
+  monitors:
+    - /Common/http
+    - /Common/tcp
+  priority_group_activation: 1
+  quorum: 2
+  reselect_tries: 3
+  service_down_action: reset
+  slow_ramp_time: 120
+  replace_all_with: false

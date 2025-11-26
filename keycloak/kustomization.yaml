@@ -1,0 +1,8 @@
+namespace: keycloak
+
+resources:
+  - ./certificate.yaml
+  - ./keycloak.yaml
+  - ./ingress.yaml
+  - ./rbac_group-admin.yaml
+  - ./rbac_infra-core-cloud.yaml

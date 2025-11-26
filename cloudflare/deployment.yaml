@@ -1,0 +1,82 @@
+# deploy cloudflare vpn tunnel
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflare-vpn-tunnel
+  labels:
+    app: cloudflare-vpn-tunnel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudflare-vpn-tunnel
+  template:
+    metadata:
+      labels:
+        app: cloudflare-vpn-tunnel
+    spec:
+      containers:
+        - name: cloudflare-vpn-tunnel
+          image: cloudflare/cloudflared:latest
+          args: ["tunnel", "--no-autoupdate", "run"]
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-vpn-tunnel-secret
+                  key: tunnel-token
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+            requests: 
+              memory: "128Mi"
+              cpu: "250m"
+          volumeMounts:
+            - name: cloudflare-cert
+              mountPath: /etc/cloudflared
+              readOnly: true
+      volumes:
+        - name: cloudflare-cert
+          secret:
+            secretName: cloudflare-vpn-tunnel-secret
+      restartPolicy: Always
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflare-vpn-publish
+  labels:
+    app: cloudflare-vpn-publish
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudflare-vpn-publish
+  template:
+    metadata:
+      labels:
+        app: cloudflare-vpn-publish
+    spec:
+      containers:
+        - name: cloudflare-vpn-publish
+          image: cloudflare/cloudflared:latest
+          args: ["tunnel", "--url", "https://172.31.254.254"]
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+            requests: 
+              memory: "128Mi"
+              cpu: "250m"
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare-vpn-tunnel-secret
+type: Opaque
+data:
+  tunnel-token: >-
+    ZXlKaElqb2lZelE0WVRneU1UVTFaR1ptTURNNVpUUXdOalEzTkRJMU5XRmhabVJpWlRVaUxDSjBJam9pTm1Zd09XTmhObUV0WldZMll5MDBaV0ZtTFRnd1lUTXROakkxTmprelltUmpPREZoSWl3aWN5STZJazE2VlRKYVYwcHJXbFJyZEZwSFJUSk5RekF3V21wb2FFeFhTbXhhYlVsMFRsUmplRTE2UlRGT01rcHFUVWRKTUNKOQ==
+

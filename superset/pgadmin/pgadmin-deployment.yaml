@@ -1,0 +1,125 @@
+# pgadmin-deployment.yaml
+
+# --- Namespace (assumindo que já existe, se não, descomente) ---
+# apiVersion: v1
+# kind: Namespace
+# metadata:
+#   name: superset
+
+---
+# --- Secret para credenciais do pgAdmin ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pgadmin-credentials
+  namespace: superset
+type: Opaque
+stringData:
+  # IMPORTANTE: Altere este email e senha para produção
+  PGADMIN_DEFAULT_EMAIL: "admin@example.com"
+  PGADMIN_DEFAULT_PASSWORD: "change-this-password"
+
+---
+# --- PersistentVolumeClaim para dados do pgAdmin ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pgadmin-data
+  namespace: superset
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi # 1GB de armazenamento para configurações
+
+---
+# --- Deployment do pgAdmin ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgadmin
+  namespace: superset
+  labels:
+    app: pgadmin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pgadmin
+  template:
+    metadata:
+      labels:
+        app: pgadmin
+    spec:
+      containers:
+      - name: pgadmin
+        image: dpage/pgadmin4:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PGADMIN_DEFAULT_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: pgadmin-credentials
+              key: PGADMIN_DEFAULT_EMAIL
+        - name: PGADMIN_DEFAULT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pgadmin-credentials
+              key: PGADMIN_DEFAULT_PASSWORD
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: pgadmin-data
+          mountPath: /var/lib/pgadmin
+      volumes:
+      - name: pgadmin-data
+        persistentVolumeClaim:
+          claimName: pgadmin-data
+
+---
+# --- Service para o pgAdmin ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgadmin
+  namespace: superset
+spec:
+  selector:
+    app: pgadmin
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: http
+  type: ClusterIP
+
+---
+# --- Ingress para acesso externo ao pgAdmin ---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pgadmin-ingress
+  namespace: superset
+  annotations:
+    # IMPORTANTE: Ajuste o cluster-issuer conforme sua configuração
+    cert-manager.io/cluster-issuer: "letsencrypt-dns-cloudflare" 
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+      # IMPORTANTE: Altere para o domínio desejado
+      - pgadmin.mmagalha.com
+    secretName: pgadmin-tls # O cert-manager criará este secret
+  rules:
+  - host: "pgadmin.mmagalha.com" # Use o mesmo domínio do TLS
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: pgadmin
+            port:
+              number: 80

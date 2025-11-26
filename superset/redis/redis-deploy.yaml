@@ -1,0 +1,224 @@
+# Redis Deployment para Superset
+# Inclui: ConfigMap, Secret, PVC, Deployment, Service e ServiceMonitor
+---
+# --- ConfigMap para configuração do Redis ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: superset
+  labels:
+    app: redis
+data:
+  redis.conf: |
+    # Redis Configuration for Superset
+    # Basic configuration
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    
+    # Memory and persistence
+    maxmemory 256mb
+    maxmemory-policy allkeys-lru
+    
+    # Persistence configuration
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # AOF (Append Only File) configuration
+    appendonly yes
+    appendfsync everysec
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    
+    
+    # Performance tuning
+    tcp-backlog 511
+    timeout 300
+    tcp-keepalive 300
+    
+    # Logging
+    loglevel notice
+    
+    # Client management
+    maxclients 10000
+
+---
+# --- Secret para credenciais do Redis ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+  namespace: superset
+  labels:
+    app: redis
+type: Opaque
+stringData:
+  # IMPORTANTE: Altere esta senha em produção
+  redis-password: "superset"
+  redis-url: "redis://:superset@redis:6379/0"
+
+---
+# --- PersistentVolumeClaim para dados do Redis ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: superset
+  labels:
+    app: redis
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: nfs-client # Descomente se tiver StorageClass específica
+
+---
+# --- Deployment do Redis ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: superset
+  labels:
+    app: redis
+    component: cache
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Para garantir que apenas uma instância acesse o volume
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        component: cache
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.2-alpine
+        imagePullPolicy: IfNotPresent
+        command: ["redis-server"]
+        args: ["/etc/redis/redis.conf"]
+        ports:
+        - containerPort: 6379
+          name: redis
+          protocol: TCP
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: redis-password
+        volumeMounts:
+        - name: redis-config
+          mountPath: /etc/redis
+          readOnly: true
+        - name: redis-data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - --no-auth-warning
+            - ping
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - --no-auth-warning
+            - ping
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+          periodSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+          runAsGroup: 999
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false  # Redis precisa escrever em /data
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
+          items:
+          - key: redis.conf
+            path: redis.conf
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-data
+      securityContext:
+        fsGroup: 999
+
+---
+# --- Service para o Redis ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: superset
+  labels:
+    app: redis
+    component: cache
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: redis
+    protocol: TCP
+    name: redis
+
+---
+# --- Service para monitoramento (opcional) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-metrics
+  namespace: superset
+  labels:
+    app: redis
+    component: metrics
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: redis
+    protocol: TCP
+    name: redis-metrics
+
+---
+# --- PodDisruptionBudget para alta disponibilidade ---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: superset
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: redis

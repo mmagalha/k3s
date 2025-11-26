@@ -1,0 +1,59 @@
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8sltmpartition
+  annotations:
+    description: "Valida se spec.partition existe e tem valor permitido"
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sLTMPartition
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            allowedPartitions:
+              description: "Lista de valores permitidos para a spec.partition"
+              type: array
+              items:
+                type: string
+            exemptNamespaces:
+              description: "Namespaces isentos da validação"
+              type: array
+              items:
+                type: string
+              default: ["kube-system", "gatekeeper-system"]
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sltmpartition
+
+        # Verifica se o namespace está isento
+        is_exempt {
+          input.review.object.metadata.namespace
+          exempt_namespace := input.parameters.exemptNamespaces[_]
+          input.review.object.metadata.namespace == exempt_namespace
+        }
+
+        # Verifica se a spec.partition existe
+        violation[{"msg": msg}] {
+          not is_exempt
+          not input.review.object.spec.partition
+          msg := "Spec 'partition' é obrigatória"
+        }
+
+        # Verifica se o valor da partition está na lista permitida
+        violation[{"msg": msg, "details": {"found": partition, "allowed": input.parameters.allowedPartitions}}] {
+          not is_exempt
+          partition := input.review.object.spec.partition
+          count(input.parameters.allowedPartitions) > 0
+          not partition_allowed(partition)
+          msg := sprintf("Valor de partition '%v' não é permitido. Valores permitidos: %v", [partition, input.parameters.allowedPartitions])
+        }
+
+        # Função auxiliar para verificar se partition é permitida
+        partition_allowed(partition) {
+          allowed := input.parameters.allowedPartitions[_]
+          partition == allowed
+        }

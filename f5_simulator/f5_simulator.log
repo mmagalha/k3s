@@ -1,0 +1,23 @@
+2025-09-17 08:41:48,940 [f5_simulator] INFO 🚀 Starting F5 Simulator with detailed logging...
+2025-09-17 08:41:48,940 [f5_simulator] INFO 👤 Default credentials: admin:admin
+2025-09-17 08:51:35,890 [f5_simulator] INFO 🚀 Starting F5 Simulator with detailed logging...
+2025-09-17 08:51:35,890 [f5_simulator] INFO 👤 Default credentials: admin:admin
+2025-09-17 08:52:45,270 [f5_simulator] INFO 🚀 Starting F5 Simulator with detailed logging...
+2025-09-17 08:52:45,270 [f5_simulator] INFO 👤 Default credentials: admin:admin
+2025-09-17 08:52:56,845 [f5_simulator] INFO 🔍 INCOMING REQUEST: GET http://localhost:8080/mgmt/tm/ltm/pool from 127.0.0.1
+2025-09-17 08:52:56,845 [f5_simulator] INFO 🔍 INCOMING REQUEST: GET http://localhost:8080/mgmt/tm/ltm/pool from 127.0.0.1
+2025-09-17 08:52:56,845 [f5_simulator] INFO 📋 Headers: {'host': 'localhost:8080', 'authorization': 'Basic YWRtaW46YWRtaW4=', 'user-agent': 'curl/8.14.1', 'accept': '*/*'}
+2025-09-17 08:52:56,845 [f5_simulator] INFO 📋 Headers: {'host': 'localhost:8080', 'authorization': 'Basic YWRtaW46YWRtaW4=', 'user-agent': 'curl/8.14.1', 'accept': '*/*'}
+2025-09-17 08:52:56,846 [f5_simulator] DEBUG User authenticated: admin
+2025-09-17 08:52:56,846 [f5_simulator] DEBUG User authenticated: admin
+2025-09-17 08:52:56,846 [f5_simulator] INFO REQUEST GET /mgmt/tm/ltm/pool
+2025-09-17 08:52:56,846 [f5_simulator] INFO REQUEST GET /mgmt/tm/ltm/pool
+2025-09-17 08:52:56,846 [f5_simulator] DEBUG Headers: {'host': 'localhost:8080', 'authorization': 'Basic YWRtaW46YWRtaW4=', 'user-agent': 'curl/8.14.1', 'accept': '*/*'}
+2025-09-17 08:52:56,846 [f5_simulator] DEBUG Headers: {'host': 'localhost:8080', 'authorization': 'Basic YWRtaW46YWRtaW4=', 'user-agent': 'curl/8.14.1', 'accept': '*/*'}
+2025-09-17 08:52:56,846 [f5_simulator] DEBUG Body: null
+2025-09-17 08:52:56,846 [f5_simulator] DEBUG Body: null
+2025-09-17 08:52:56,847 [f5_simulator] INFO ✅ RESPONSE: 200
+2025-09-17 08:52:56,847 [f5_simulator] INFO ✅ RESPONSE: 200
+2025-09-17 08:52:56,847 [uvicorn.access] INFO 127.0.0.1:42668 - "GET /mgmt/tm/ltm/pool HTTP/1.1" 200
+2025-09-17 11:38:06,903 [f5_simulator] INFO 🚀 Starting F5 Simulator with detailed logging...
+2025-09-17 11:38:06,910 [f5_simulator] INFO 👤 Default credentials: admin:admin

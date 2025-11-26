@@ -1,0 +1,395 @@
+# phpIPAM Deployment para Kubernetes
+# Baseado no docker-compose original
+# Inclui: MariaDB, phpIPAM Web, phpIPAM Cron
+---
+# --- Secret para credenciais do banco ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: phpipam-secrets
+  namespace: phpipam
+  labels:
+    app: phpipam
+type: Opaque
+stringData:
+  # IMPORTANTE: Altere estas senhas em produção
+  mysql-root-password: "secure_mysql_root_password_2024"
+  phpipam-db-password: "secure_phpipam_db_password_2024"
+  mysql-user: "phpipam"
+  mysql-database: "phpipam"
+
+---
+# --- ConfigMap para configurações ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: phpipam-config
+  namespace: phpipam
+  labels:
+    app: phpipam
+data:
+  TZ: "Europe/Lisbon"
+  IPAM_DATABASE_HOST: "phpipam-mariadb"
+  IPAM_DATABASE_WEBHOST: "%"
+  SCAN_INTERVAL: "1h"
+  MYSQL_DATABASE: "phpipam"
+  MYSQL_USER: "phpipam"
+  IPAM_TRUST_X_FORWARDED: "true"
+  IPAM_DISABLE_INSTALLER: "0"
+
+---
+# --- PVC para dados do MariaDB ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: phpipam-db-data
+  namespace: phpipam
+  labels:
+    app: phpipam
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-client # Descomente se tiver StorageClass específica    
+
+---
+# --- PVC para logos do phpIPAM ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: phpipam-logo
+  namespace: phpipam
+  labels:
+    app: phpipam
+    component: web
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: nfs-client # Descomente se tiver StorageClass específica    
+
+---
+# --- PVC para certificados CA ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: phpipam-ca
+  namespace: phpipam
+  labels:
+    app: phpipam
+    component: certificates
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: nfs-client # Descomente se tiver StorageClass específica    
+
+---
+# --- Deployment do MariaDB ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phpipam-mariadb
+  namespace: phpipam
+  labels:
+    app: phpipam
+    component: database
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: phpipam
+      component: database
+  template:
+    metadata:
+      labels:
+        app: phpipam
+        component: database
+    spec:
+      containers:
+      - name: mariadb
+        image: mariadb:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: phpipam-secrets
+              key: mysql-root-password
+        - name: MYSQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: phpipam-config
+              key: MYSQL_DATABASE
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: phpipam-secrets
+              key: mysql-user
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: phpipam-secrets
+              key: phpipam-db-password     
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: db-data
+          mountPath: /var/lib/mysql
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - mariadb-admin
+            - ping
+            - -h
+            - localhost
+            - -u root
+            - -p$MYSQL_ROOT_PASSWORD
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mariadb-admin
+            - ping
+            - -h
+            - localhost
+            - -u root
+            - -p$MYSQL_ROOT_PASSWORD
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+          periodSeconds: 5
+      volumes:
+      - name: db-data
+        persistentVolumeClaim:
+          claimName: phpipam-db-data
+
+---
+# --- Service do MariaDB ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phpipam-mariadb
+  namespace: phpipam
+  labels:
+    app: phpipam
+    component: database
+spec:
+  type: ClusterIP
+  selector:
+    app: phpipam
+    component: database
+  ports:
+  - port: 3306
+    targetPort: mysql
+    protocol: TCP
+    name: mysql
+
+---
+# --- Deployment do phpIPAM Web ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phpipam-web
+  namespace: phpipam
+  labels:
+    app: phpipam
+    component: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phpipam
+      component: web
+  template:
+    metadata:
+      labels:
+        app: phpipam
+        component: web
+    spec:
+      containers:
+      - name: phpipam-web
+        image: phpipam/phpipam-www:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TZ
+          valueFrom:
+            configMapKeyRef:
+              name: phpipam-config
+              key: TZ
+        - name: IPAM_DATABASE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: phpipam-config
+              key: IPAM_DATABASE_HOST
+        - name: IPAM_DATABASE_PASS
+          valueFrom:
+            secretKeyRef:
+              name: phpipam-secrets
+              key: phpipam-db-password
+        - name: IPAM_DATABASE_WEBHOST
+          valueFrom:
+            configMapKeyRef:
+              name: phpipam-config
+              key: IPAM_DATABASE_WEBHOST
+        - name: IPAM_TRUST_X_FORWARDED
+          valueFrom:
+            configMapKeyRef:
+              name: phpipam-config
+              key: IPAM_TRUST_X_FORWARDED
+        - name: IPAM_DISABLE_INSTALLER
+          valueFrom:
+            configMapKeyRef:
+              name: phpipam-config
+              key: IPAM_DISABLE_INSTALLER                     
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: phpipam-logo
+          mountPath: /phpipam/css/images/logo
+        - name: phpipam-ca
+          mountPath: /usr/local/share/ca-certificates
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - NET_RAW
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: phpipam-logo
+        persistentVolumeClaim:
+          claimName: phpipam-logo
+      - name: phpipam-ca
+        persistentVolumeClaim:
+          claimName: phpipam-ca
+
+---
+# --- Service do phpIPAM Web ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phpipam-web
+  namespace: phpipam
+  labels:
+    app: phpipam
+    component: web
+spec:
+  type: ClusterIP
+  selector:
+    app: phpipam
+    component: web
+  ports:
+  - port: 80
+    targetPort: http
+    protocol: TCP
+    name: http
+
+---
+# --- Deployment do phpIPAM Cron ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phpipam-cron
+  namespace: phpipam
+  labels:
+    app: phpipam
+    component: cron
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phpipam
+      component: cron
+  template:
+    metadata:
+      labels:
+        app: phpipam
+        component: cron
+    spec:
+      containers:
+      - name: phpipam-cron
+        image: phpipam/phpipam-cron:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TZ
+          valueFrom:
+            configMapKeyRef:
+              name: phpipam-config
+              key: TZ
+        - name: IPAM_DATABASE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: phpipam-config
+              key: IPAM_DATABASE_HOST
+        - name: IPAM_DATABASE_PASS
+          valueFrom:
+            secretKeyRef:
+              name: phpipam-secrets
+              key: phpipam-db-password
+        - name: SCAN_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: phpipam-config
+              key: SCAN_INTERVAL
+        volumeMounts:
+        - name: phpipam-ca
+          mountPath: /usr/local/share/ca-certificates
+          readOnly: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - NET_RAW
+      volumes:
+      - name: phpipam-ca
+        persistentVolumeClaim:
+          claimName: phpipam-ca
+
+---

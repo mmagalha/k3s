@@ -1,0 +1,209 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: keycloak
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: keycloak
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: keycloak
+  name: keycloak-discovery
+spec:
+  selector:
+    app: keycloak
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: apps/v1
+# Use a stateful setup to ensure that for a rolling update Pods are restarted with a rolling strategy one-by-one.
+# This prevents losing in-memory information stored redundantly in two Pods.
+kind: Deployment
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  #serviceName: keycloak-discovery
+  # Run with one replica to save resources, or with two replicas to allow for rolling updates for configuration changes
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.3.3
+          args: ["start"]
+          envFrom:
+            - secretRef:
+                name: keycloak-secret             
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: 9000
+            periodSeconds: 1
+            failureThreshold: 600              
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            periodSeconds: 10
+            failureThreshold: 3              
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 9000
+            periodSeconds: 10
+            failureThreshold: 3              
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 2000Mi
+            requests:
+              cpu: 500m
+              memory: 1700Mi
+---
+# This is deployment of PostgreSQL with an ephemeral storage for testing: Once the Pod stops, the data is lost.
+# For a production setup, replace it with a database setup that persists your data.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+          env:
+            - name: POSTGRES_USER
+              value: "keycloak"
+            - name: POSTGRES_PASSWORD
+              value: "keycloak"
+            - name: POSTGRES_DB
+              value: "keycloak"
+            - name: POSTGRES_LOG_STATEMENT
+              value: "all"
+          ports:
+            - name: postgres
+              containerPort: 5432
+          volumeMounts:
+            # Using volume mount for PostgreSQL's data folder as it is otherwise not writable
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: keycloak-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: postgres
+  name: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  type: NodePort
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-secret
+type: Opaque
+stringData:
+  KC_HTTP_ENABLED: 'true'
+  KC_HEALTH_ENABLED: 'true'
+  KC_DB_URL_DATABASE: 'keycloak'
+  KC_DB_URL_HOST: 'postgres'
+  KC_DB: 'postgres'
+  KC_DB_PASSWORD: 'keycloak'
+  KC_DB_USERNAME: 'keycloak'
+  KC_BOOTSTRAP_ADMIN_USERNAME: 'admin'
+  KC_BOOTSTRAP_ADMIN_PASSWORD: 'ncc1701'
+  KC_HOSTNAME_STRICT: 'false' 
+  #KC_HOSTNAME: 'key.mmagalha.com'
+  KC_CACHE: 'ispn'
+  #KC_PROXY: 'edge'            
+  KC_PROXY_HEADERS: 'xforwarded'
+  KC_LOG: 'console'
+  KC_LOG_CONSOLE_COLOR: 'true'
+  KC_LOG_CONSOLE_LEVEL: 'debug'
+  KC_LOG_LEVEL: 'debug'
+---
+#apiVersion: traefik.io/v1alpha1
+#kind: IngressRoute
+#metadata:
+#  annotations:
+#    meta.helm.sh/release-name: traefik
+#    meta.helm.sh/release-namespace: traefik
+#  labels:
+#    app.kubernetes.io/instance: traefik-traefik
+#    app.kubernetes.io/name: traefik
+#  name: keycloak-tls
+#spec:
+#  entryPoints:
+#  - web
+#  - websecure
+#  routes:
+#  - kind: Rule
+#    match: Host(`key.mmagalha.com`)
+#    services:
+#    - kind: Service
+#      namespace: keycloak
+#      name: keycloak
+#      port: 8080
+#      passHostHeader: true
+##  tls:
+##    secretName: mmagalha-tls 
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: keycloak-pvc
+  annotations:
+    nfs.io/storage-path: "keycloak-path" # not required, depending on whether this annotation was shown in the storage class description
+spec:
+  storageClassName: nfs-client
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi

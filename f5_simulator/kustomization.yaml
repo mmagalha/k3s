@@ -1,0 +1,15 @@
+namespace: f5-simulator
+
+resources:
+- f5_simul_deploy.yaml
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+images:
+- name: controller
+  newName: reg.mmagalha.com/library/f5-simulator
+  newTag: 0.0.1
+- name: f5-simulator
+  newName: reg.mmagalha.com/library/f5-simulator
+  newTag: 0.0.2

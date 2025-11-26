@@ -1,0 +1,78 @@
+# F5 Simulator k8s Deployment and Service manifests
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: f5-simulator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: f5-simulator
+  namespace: f5-simulator
+  labels:
+    app: f5-simulator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: f5-simulator
+  template:
+    metadata:
+      labels:
+        app: f5-simulator
+    spec:
+      imagePullSecrets:
+      - name: regcred    
+      containers:
+      - name: f5-simulator
+        image: f5-simulator:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: F5_USERNAME
+          value: "admin"
+        - name: F5_PASSWORD
+          value: "f5password"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: f5-simulator
+  namespace: f5-simulator
+spec:
+  selector:
+    app: f5-simulator
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-f5-v1
+  namespace: f5-simulator
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns-cloudflar
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    #kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k" 
+    nginx.ingress.kubernetes.io/service-upstream: "true"   
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+      - f5.mmagalha.com 
+    secretName: f5.mmagalha.com-tls
+  rules:
+  - host: "f5.mmagalha.com"
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: f5-simulator
+            port:
+              number: 8080  
